@@ -5,9 +5,10 @@ import styles from './Home.module.scss';
 
 interface HomeProps {
   onJoinRoom: (roomId: string) => void;
+  version?: string;
 }
 
-export function Home({ onJoinRoom }: HomeProps) {
+export function Home({ onJoinRoom, version }: HomeProps) {
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -83,6 +84,8 @@ export function Home({ onJoinRoom }: HomeProps) {
             Join Room
           </button>
         </div>
+
+        {version && <p className={styles.version}>v{version}</p>}
       </div>
     );
   }
