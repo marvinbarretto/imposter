@@ -5,16 +5,53 @@ import { DebugPanel } from './components/DebugPanel';
 import { version } from '../package.json';
 import './styles/variables.scss';
 
+// Set to true to show debug panel
+const DEBUG_MODE = false;
+
 type Screen = 'home' | 'lobby' | 'game' | 'voting' | 'results';
 
 function App() {
   const [screen, setScreen] = useState<Screen>('home');
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomId, setRoomIdState] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(true);
+
+  const {
+    currentPlayer,
+    storedRoomId,
+    setRoomId: storeRoomId,
+    clearCurrentPlayer,
+    clearSession,
+  } = useCurrentPlayer();
+
   const { room, subscriptionStatus: roomSubStatus } = useRoomWithStatus(roomId);
   const { players, subscriptionStatus: playersSubStatus } = usePlayersWithStatus(roomId);
-  const { currentPlayer, clearCurrentPlayer } = useCurrentPlayer();
 
-  // Sync screen with room status (for non-hosts)
+  // On mount, try to restore session from localStorage
+  useEffect(() => {
+    if (storedRoomId && currentPlayer.id) {
+      console.log('🔄 Restoring session:', storedRoomId);
+      setRoomIdState(storedRoomId);
+    }
+    setIsRestoring(false);
+  }, []); // Only run once on mount
+
+  // Validate player still exists in room after restoration
+  useEffect(() => {
+    if (isRestoring) return;
+    if (!roomId || !currentPlayer.id) return;
+    if (players.length === 0) return; // Still loading
+
+    const playerStillInRoom = players.some(p => p.id === currentPlayer.id);
+
+    if (!playerStillInRoom) {
+      console.log('⚠️ Player no longer in room, clearing session');
+      clearSession();
+      setRoomIdState(null);
+      setScreen('home');
+    }
+  }, [roomId, currentPlayer.id, players, isRestoring, clearSession]);
+
+  // Sync screen with room status
   useEffect(() => {
     if (!room) return;
 
@@ -37,12 +74,13 @@ function App() {
   }, [room?.status]);
 
   const handleJoinRoom = (id: string) => {
-    setRoomId(id);
+    setRoomIdState(id);
+    storeRoomId(id); // Persist to localStorage
     setScreen('lobby');
   };
 
   const handleLeave = () => {
-    setRoomId(null);
+    setRoomIdState(null);
     setScreen('home');
     clearCurrentPlayer();
   };
@@ -50,6 +88,11 @@ function App() {
   const handlePlayAgain = () => {
     setScreen('lobby');
   };
+
+  // Show loading while restoring session
+  if (isRestoring) {
+    return null;
+  }
 
   const renderScreen = () => {
     switch (screen) {
@@ -98,16 +141,18 @@ function App() {
   return (
     <>
       {renderScreen()}
-      <DebugPanel
-        roomId={roomId}
-        roomStatus={room?.status ?? null}
-        playerCount={players.length}
-        currentPlayerId={currentPlayer.id}
-        subscriptionStatus={{
-          room: roomSubStatus,
-          players: playersSubStatus,
-        }}
-      />
+      {DEBUG_MODE && (
+        <DebugPanel
+          roomId={roomId}
+          roomStatus={room?.status ?? null}
+          playerCount={players.length}
+          currentPlayerId={currentPlayer.id}
+          subscriptionStatus={{
+            room: roomSubStatus,
+            players: playersSubStatus,
+          }}
+        />
+      )}
     </>
   );
 }
